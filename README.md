@@ -273,6 +273,8 @@ Missing your tool? [Open an issue](https://github.com/mm7894215/TokenTracker/iss
 
 ## 🏗️ How It Works
 
+For deeper technical details, see the [Architecture Documentation](docs/architecture.md) covering the collector process, desktop widget IPC protocol, and CLI internals.
+
 ```mermaid
 flowchart LR
     A["AI coding tools<br/>Claude Code · Codex · Cursor · Gemini · Kiro<br/>OpenCode · OpenClaw · Every Code · Hermes · Copilot<br/>Kimi Code · CodeBuddy · WorkBuddy · Grok Build · Kilo CLI · Kilo Code<br/>Antigravity · oh-my-pi · pi · Craft · Roo · Zed · Goose · Droid · Mimo · ZCode · AnythingLLM"]
@@ -305,7 +307,7 @@ flowchart LR
 
 ## 📦 Configuration
 
-Most users never need this — defaults are sensible. For advanced setups:
+Most users never need this — defaults are sensible. For advanced setups (also detailed in the [Architecture Documentation](docs/architecture.md)):
 
 | Variable | Description | Default |
 |---|---|---|
