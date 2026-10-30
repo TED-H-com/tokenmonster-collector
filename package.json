@@ -43,13 +43,13 @@
     "version": "node scripts/sync-versions.cjs && git add TokenTrackerBar/project.yml TokenTrackerWin/TokenTrackerWin.csproj"
   },
   "dependencies": {
-    "@mongodb-js/zstd": "^2.0.1",
     "undici": "^8.7.0",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
+    "@mongodb-js/zstd": "^2.0.1",
     "@sourcegraph/scip-typescript": "^0.4.0",
-    "esbuild": "0.28.1"
+    "esbuild": "^0.28.1"
   },
   "repository": {
     "type": "git",
