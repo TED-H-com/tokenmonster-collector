@@ -77,7 +77,7 @@ function aggregateWrapped(rows, opts = {}) {
   const dedup = new Map();
   for (const row of Array.isArray(rows) ? rows : []) {
     if (!row || typeof row !== "object") continue;
-    const key = `${row.source || ""}|${row.model || ""}|${row.hour_start || ""}`;
+    const key = (row.source || "") + "|" + (row.model || "") + "|" + (row.hour_start || "");
     // Apply the same legacy-row corrections (codex inclusive-input, cursor
     // billable=0) as local-api.js readQueueData so `tracker wrapped` matches
     // the dashboard for identical data.

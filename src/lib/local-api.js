@@ -100,19 +100,31 @@ function readProjectQueueData(projectQueuePath) {
     }
     return [];
   }
-  const lines = raw.split("\n").filter((l) => l.trim());
+
   const seen = new Map();
-  for (const line of lines) {
+  let start = 0;
+  let idx = raw.indexOf("\n");
+
+  const processLine = (line) => {
+    if (!line) return;
     try {
       const row = JSON.parse(line);
-      const key = `${row.project_key || ""}|${row.source || ""}|${row.hour_start || ""}`;
+      const key = (row.project_key || "") + "|" + (row.source || "") + "|" + (row.hour_start || "");
       // Same legacy-row corrections as the main queue (codex inclusive-input,
       // cursor billable=0) so both read paths report identical numbers.
       seen.set(key, normalizeQueueRow(row));
     } catch {
       // skip malformed
     }
+  };
+
+  while (idx !== -1) {
+    processLine(raw.substring(start, idx).trim());
+    start = idx + 1;
+    idx = raw.indexOf("\n", start);
   }
+  processLine(raw.substring(start).trim());
+
   return Array.from(seen.values());
 }
 
@@ -172,30 +184,38 @@ function readQueueData(queuePath) {
     }
     return [];
   }
-  const lines = raw.split("\n").filter((l) => l.trim());
-  // Parse row-by-row so a single corrupted line (partial write, disk-full
-  // truncation, …) does not wipe out every other row with it.
-  const parsed = [];
+
+  const seen = new Map();
   let malformed = 0;
-  for (const line of lines) {
+  let totalLines = 0;
+  let start = 0;
+  let idx = raw.indexOf("\n");
+
+  const processLine = (line) => {
+    if (!line) return;
+    totalLines++;
     try {
-      parsed.push(JSON.parse(line));
+      const row = JSON.parse(line);
+      const key = (row.source || "") + "|" + (row.model || "") + "|" + (row.hour_start || "");
+      seen.set(key, normalizeQueueRow(row));
     } catch {
       malformed += 1;
     }
+  };
+
+  while (idx !== -1) {
+    processLine(raw.substring(start, idx).trim());
+    start = idx + 1;
+    idx = raw.indexOf("\n", start);
   }
+  processLine(raw.substring(start).trim());
+
   if (malformed > 0) {
     console.error(
-      `[LocalAPI] readQueueData: skipped ${malformed}/${lines.length} malformed line(s) in ${queuePath}`,
+      `[LocalAPI] readQueueData: skipped ${malformed}/${totalLines} malformed line(s) in ${queuePath}`,
     );
   }
-  // Deduplicate: each sync appends cumulative totals per bucket, so for
-  // each (source, model, hour_start) keep only the latest (last) entry.
-  const seen = new Map();
-  for (const row of parsed) {
-    const key = `${row.source || ""}|${row.model || ""}|${row.hour_start || ""}`;
-    seen.set(key, normalizeQueueRow(row));
-  }
+
   return Array.from(seen.values());
 }
 
@@ -471,22 +491,28 @@ function getTimeZoneContext(url) {
   };
 }
 
+const formatterCache = new Map();
+
 function getZonedParts(date, { timeZone, offsetMinutes } = {}) {
   const dt = date instanceof Date ? date : new Date(date);
   if (!Number.isFinite(dt.getTime())) return null;
 
   if (timeZone && typeof Intl !== "undefined" && Intl.DateTimeFormat) {
     try {
-      const formatter = new Intl.DateTimeFormat("en-CA", {
-        timeZone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hourCycle: "h23",
-      });
+      let formatter = formatterCache.get(timeZone);
+      if (!formatter) {
+        formatter = new Intl.DateTimeFormat("en-CA", {
+          timeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hourCycle: "h23",
+        });
+        formatterCache.set(timeZone, formatter);
+      }
       const parts = formatter.formatToParts(dt);
       const values = parts.reduce((acc, part) => {
         if (part.type && part.value) acc[part.type] = part.value;
@@ -2604,6 +2630,9 @@ module.exports = {
   // Shared legacy-row correction so every queue reader (main queue, project
   // queue, wrapped aggregator) reports the same numbers for the same data.
   normalizeQueueRow,
+  // Exported internally for benchmark testing.
+  readQueueData,
+  readProjectQueueData,
   // Machine-stable identity (config.json machineId) — shared with
   // `tracker device-login` so the CLI device-flow anchors its cloud device
   // to the machine, not the hostname.
