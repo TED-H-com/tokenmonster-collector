@@ -76,6 +76,8 @@ An accurate, local-first token usage and cost dashboard for **27 AI coding tools
 
 > **Requirements**: Node.js **20+** (CLI runs on macOS / Linux / Windows; native desktop app ships for both macOS (menu bar) and Windows (system tray). Cursor token reading uses the system `sqlite3` CLI when available and falls back to `node:sqlite` on supported Node releases).
 
+> **API Reference**: Check out the [API Reference and Developer Usage](docs/api-reference.md) for details on core modules (`src/lib/local-api.js`, `src/lib/skill-usage.js`, `src/lib/wrapped-aggregator.js`), their specifications, and integration examples.
+
 ```bash
 npx tokentracker-cli
 ```
@@ -103,6 +105,7 @@ tokentracker status       # Check hook status
 tokentracker status --json     # Machine-readable summary (pipe to jq, ingest from AI agents)
 tokentracker status --light    # Plain ASCII table (CI / SSH, no spinner)
 tokentracker doctor       # Health check
+tokentracker wrapped      # View your year-end usage summary
 ```
 
 ### 🍺 Homebrew (macOS)
@@ -253,6 +256,15 @@ Upgrade with `brew upgrade --cask mm7894215/tokentracker/tokentracker`. The tap 
 Missing your tool? [Open an issue](https://github.com/mm7894215/TokenTracker/issues/new) — adding new providers is usually one parser file away.
 
 ---
+
+## 🧠 Core Modules
+
+Token Tracker strictly separates its components to ensure clean boundaries between Node CLI routines and React/Vite dashboard features.
+- `src/lib/local-api.js`: Handles local achievements computation and exposes the HTTP API layer used by the dashboard and native widgets.
+- `src/lib/skill-usage.js`: Handles tool usage event scanning (e.g., Claude skills), analyzing logs locally.
+- `src/lib/wrapped-aggregator.js`: Aggregates daily cost and token logs to compute year-end wraps.
+
+See the [API Reference](docs/api-reference.md) for more details.
 
 ## 🆚 Why TokenTracker? <a id="ccusage-alternative"></a>
 
