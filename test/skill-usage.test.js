@@ -73,6 +73,114 @@ describe("scanSkillUsage", () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
+  it("handles empty files and non-json lines", async () => {
+    const home = makeHome();
+    const projDir = path.join(home, ".claude", "projects", "proj");
+    fs.writeFileSync(path.join(projDir, "session3.jsonl"), `not json\n`);
+    const result = await scanSkillUsage({ home, force: true });
+    assert.equal(result.totalInvocations, 0);
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("handles JSON parsing error on lines containing name:Skill", async () => {
+    const home = makeHome();
+    const projDir = path.join(home, ".claude", "projects", "proj");
+    fs.writeFileSync(path.join(projDir, "session6.jsonl"), `{"name":"Skill" , this is bad json}\n`);
+    const result = await scanSkillUsage({ home, force: true });
+    assert.equal(result.totalInvocations, 0);
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("handles valid JSON but without content or skills", async () => {
+    const home = makeHome();
+    const projDir = path.join(home, ".claude", "projects", "proj");
+    fs.writeFileSync(path.join(projDir, "session4.jsonl"), `${JSON.stringify({type: "assistant", message: {content: "no tool"}})}\n`);
+    const result = await scanSkillUsage({ home, force: true });
+    assert.equal(result.totalInvocations, 0);
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("handles missing project directory gracefully", async () => {
+    const home = makeHome();
+    fs.rmSync(path.join(home, ".claude"), { recursive: true, force: true });
+    const result = await scanSkillUsage({ home, force: true });
+    assert.equal(result.totalInvocations, 0);
+    assert.equal(result.scannedFiles, 0);
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("handles write failure for usage-cache.json gracefully", async () => {
+    const home = makeHome();
+    const projDir = path.join(home, ".claude", "projects", "proj");
+    fs.writeFileSync(
+      path.join(projDir, "s.jsonl"),
+      `${assistantLine({ id: "m1", ts: "2026-05-01T00:00:00.000Z", model: "x", skills: ["foo"], usage: { input_tokens: 1, output_tokens: 1 } })}\n`,
+    );
+
+    // Make cache directory read-only to force write failure
+    const cacheDir = path.join(home, ".tokentracker", "skills");
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.chmodSync(cacheDir, 0o444);
+
+    const first = await scanSkillUsage({ home, force: true });
+    assert.equal(first.cached, false);
+
+    fs.chmodSync(cacheDir, 0o755); // restore for cleanup
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("handles unstatable file gracefully", async () => {
+    const home = makeHome();
+    const projDir = path.join(home, ".claude", "projects", "proj");
+    const p = path.join(projDir, "session_unstatable.jsonl");
+    fs.writeFileSync(p, `not json\n`);
+    const originalStat = fs.promises.stat;
+    fs.promises.stat = async (f) => {
+      if (f === p) throw new Error("EACCES");
+      return originalStat(f);
+    };
+    try {
+      const result = await scanSkillUsage({ home, force: true });
+      assert.equal(result.totalInvocations, 0);
+    } finally {
+      fs.promises.stat = originalStat;
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("handles empty parsed object gracefully", async () => {
+    const home = makeHome();
+    const projDir = path.join(home, ".claude", "projects", "proj");
+    // "name":"Skill" is required to pass the string matching
+    fs.writeFileSync(path.join(projDir, "session5.jsonl"), `${JSON.stringify({name: "Skill"})}\n`);
+    const result = await scanSkillUsage({ home, force: true });
+    assert.equal(result.totalInvocations, 0);
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("handles malformed cache fallback gracefully", async () => {
+    const home = makeHome();
+    const projDir = path.join(home, ".claude", "projects", "proj");
+    fs.writeFileSync(
+      path.join(projDir, "s.jsonl"),
+      `${assistantLine({ id: "m1", ts: "2026-05-01T00:00:00.000Z", model: "x", skills: ["foo"], usage: { input_tokens: 1, output_tokens: 1 } })}\n`,
+    );
+
+    // Initial valid scan to write cache
+    await scanSkillUsage({ home, force: true });
+
+    // Corrupt cache
+    const cacheDir = path.join(home, ".tokentracker", "skills");
+    fs.writeFileSync(path.join(cacheDir, "usage-cache.json"), "invalid json");
+
+    // Must fallback to force recompute without throwing
+    const result = await scanSkillUsage({ home });
+    assert.equal(result.cached, false);
+    assert.equal(result.totalInvocations, 1);
+
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
   it("uses the fingerprint cache until files change", async () => {
     const home = makeHome();
     const projDir = path.join(home, ".claude", "projects", "proj");

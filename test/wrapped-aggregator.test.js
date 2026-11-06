@@ -33,7 +33,21 @@ function row({ source, model, hour_start, total = 100, conv = 1, billable }) {
   };
 }
 
+test("rowTokens fallback", () => {
+  const w = aggregateWrapped([
+    {
+      source: "a", model: "m1", hour_start: "2026-04-01T10:00:00.000Z",
+      // missing total_tokens and billable_total_tokens
+      conversation_count: 1
+    }
+  ]);
+  assert.equal(w.totals.tokens, 0);
+});
+
 test("empty input returns a zeroed summary", () => {
+  const w1 = aggregateWrapped(null);
+  assert.equal(w1.totals.tokens, 0);
+
   const w = aggregateWrapped([]);
   assert.equal(w.totals.tokens, 0);
   assert.equal(w.totals.active_days, 0);
@@ -61,6 +75,29 @@ test("--year filter scopes the aggregate", () => {
   assert.equal(w.year, 2024);
   assert.equal(w.totals.tokens, 7);
   assert.equal(w.top.sources[0].source, "a");
+});
+
+test("isoHour ignores non-string hour_start", () => {
+  const w = aggregateWrapped([
+    row({ source: "claude", model: "m1", hour_start: 12345, total: 100 })
+  ]);
+  assert.equal(w.peak_hour, null);
+});
+
+test("isoHour ignores strings that don't match pattern", () => {
+  const w = aggregateWrapped([
+    row({ source: "claude", model: "m1", hour_start: "no-time-here", total: 100 })
+  ]);
+  assert.equal(w.peak_hour, null);
+});
+
+test("aggregateWrapped ignores bad rows inside array", () => {
+  const w = aggregateWrapped([
+    null,
+    "bad string",
+    row({ source: "claude", model: "m1", hour_start: "2026-04-01T10:00:00.000Z", total: 100 })
+  ]);
+  assert.equal(w.totals.tokens, 100);
 });
 
 test("source shares sum to ~1.0 and respect ranking", () => {
@@ -125,6 +162,7 @@ test("highlights are populated for non-empty summaries", () => {
 });
 
 test("formatCompact magnitudes", () => {
+  assert.equal(formatCompact(NaN), "0");
   assert.equal(formatCompact(0), "0");
   assert.equal(formatCompact(999), "999");
   assert.equal(formatCompact(1500), "1.5K");
